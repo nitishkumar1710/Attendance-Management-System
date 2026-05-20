@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attendance Management System</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2235;
+    --border: #1e2d45;
+    --accent: #00d4aa;
+    --accent2: #ff6b6b;
+    --accent3: #ffd166;
+    --text: #e8edf5;
+    --muted: #6b7fa3;
+    --present: #00d4aa;
+    --absent: #ff6b6b;
+    --marks-fill: #ffd166;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Animated background grid ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,170,.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,170,.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── Header ── */
+  header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(10,14,26,.9);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 68px;
+  }
+
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.25rem;
+    letter-spacing: -.02em;
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+  }
+  .logo-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 14px var(--accent);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity:1; transform:scale(1); }
+    50% { opacity:.6; transform:scale(.8); }
+  }
+
+  .header-meta {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+  }
+  .meta-badge {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: .3rem .8rem;
+    border-radius: 6px;
+    font-size: .72rem;
+    color: var(--muted);
+  }
+  .meta-badge span { color: var(--accent); font-weight: 500; }
+
+  /* ── Layout ── */
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+
+  /* ── Session Config Panel ── */
+  .config-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.5rem 2rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr auto;
+    gap: 1rem;
+    align-items: end;
+    margin-bottom: 2rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .config-panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), transparent 60%);
+  }
+
+  .field-group label {
+    display: block;
+    font-size: .7rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    margin-bottom: .45rem;
+  }
+  .field-group input, .field-group select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: .6rem .9rem;
+    border-radius: 8px;
+    font-family: 'DM Mono', monospace;
+    font-size: .85rem;
+    outline: none;
+    transition: border-color .2s;
+  }
+  .field-group input:focus, .field-group select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0,212,170,.1);
+  }
+  .field-group select option { background: var(--surface2); }
+
+  /* ── Stats Bar ── */
+  .stats-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.1rem 1.4rem;
+    display: flex;
+    flex-direction: column;
+    gap: .25rem;
+    position: relative;
+    overflow: hidden;
+    transition: transform .2s, border-color .2s;
+  }
+  .stat-card:hover { transform: translateY(-2px); border-color: var(--accent); }
+  .stat-label { font-size: .68rem; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
+  .stat-value { font-family: 'Syne', sans-serif; font-size: 1.8rem; font-weight: 800; }
+  .stat-card.present .stat-value { color: var(--present); }
+  .stat-card.absent  .stat-value { color: var(--absent); }
+  .stat-card.marks   .stat-value { color: var(--marks-fill); }
+  .stat-card.total   .stat-value { color: var(--text); }
+
+  /* ── Controls Row ── */
+  .controls-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1.2rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .section-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: -.01em;
+  }
+  .bulk-btns {
+    display: flex;
+    gap: .5rem;
+  }
+  .btn {
+    padding: .5rem 1.1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    font-family: 'DM Mono', monospace;
+    font-size: .78rem;
+    cursor: pointer;
+    transition: all .18s;
+    letter-spacing: .02em;
+  }
+  .btn-ghost { background: transparent; color: var(--muted); }
+  .btn-ghost:hover { border-color: var(--text); color: var(--text); }
+  .btn-present { background: rgba(0,212,170,.1); color: var(--present); border-color: rgba(0,212,170,.3); }
+  .btn-present:hover { background: rgba(0,212,170,.2); }
+  .btn-absent  { background: rgba(255,107,107,.1); color: var(--absent); border-color: rgba(255,107,107,.3); }
+  .btn-absent:hover  { background: rgba(255,107,107,.2); }
+  .btn-submit {
+    background: var(--accent);
+    color: #0a0e1a;
+    border-color: var(--accent);
+    font-weight: 600;
+    padding: .65rem 2rem;
+    font-size: .88rem;
+  }
+  .btn-submit:hover { background: #00f0c0; box-shadow: 0 0 24px rgba(0,212,170,.4); transform: translateY(-1px); }
+  .btn-submit:disabled { opacity: .4; cursor: not-allowed; transform: none; box-shadow: none; }
+  .btn-export { background: rgba(255,209,102,.1); color: var(--marks-fill); border-color: rgba(255,209,102,.3); }
+  .btn-export:hover { background: rgba(255,209,102,.2); }
+
+  /* ── Student Table ── */
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    margin-bottom: 2rem;
+  }
+
+  table { width: 100%; border-collapse: collapse; }
+
+  thead {
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+  thead th {
+    padding: .9rem 1.2rem;
+    text-align: left;
+    font-size: .68rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    font-weight: 500;
+  }
+  thead th:first-child { width: 52px; text-align: center; }
+  thead th.col-att { width: 170px; }
+  thead th.col-marks { width: 260px; }
+
+  tbody tr {
+    border-bottom: 1px solid rgba(30,45,69,.6);
+    transition: background .15s;
+  }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: rgba(255,255,255,.02); }
+  tbody tr.is-present { background: rgba(0,212,170,.03); }
+  tbody tr.is-absent  { background: rgba(255,107,107,.03); }
+
+  tbody td {
+    padding: .75rem 1.2rem;
+    font-size: .82rem;
+    vertical-align: middle;
+  }
+  td.col-num { text-align: center; color: var(--muted); font-size: .75rem; }
+
+  .student-name { font-weight: 500; color: var(--text); }
+  .roll-num { font-size: .7rem; color: var(--muted); }
+
+  /* ── Attendance Toggle ── */
+  .att-toggle {
+    display: flex;
+    gap: .4rem;
+  }
+  .att-btn {
+    flex: 1;
+    padding: .4rem .6rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    font-family: 'DM Mono', monospace;
+    font-size: .72rem;
+    cursor: pointer;
+    transition: all .15s;
+    background: transparent;
+    color: var(--muted);
+    text-align: center;
+  }
+  .att-btn.active-p {
+    background: rgba(0,212,170,.15);
+    border-color: var(--present);
+    color: var(--present);
+    font-weight: 600;
+  }
+  .att-btn.active-a {
+    background: rgba(255,107,107,.15);
+    border-color: var(--absent);
+    color: var(--absent);
+    font-weight: 600;
+  }
+
+  /* ── Marks Buttons (0–5) ── */
+  .marks-wrap {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: nowrap;
+  }
+  .mark-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 7px;
+    border: 1.5px solid var(--border);
+    background: var(--surface2);
+    color: var(--muted);
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: .82rem;
+    cursor: pointer;
+    transition: all .15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .mark-btn:hover {
+    border-color: var(--marks-fill);
+    color: var(--marks-fill);
+    background: rgba(255,209,102,.08);
+    transform: translateY(-2px);
+  }
+  .mark-btn.selected {
+    background: var(--marks-fill);
+    border-color: var(--marks-fill);
+    color: #0a0e1a;
+    box-shadow: 0 0 10px rgba(255,209,102,.45);
+    transform: translateY(-1px);
+  }
+  /* dim buttons above selected value */
+  .mark-btn.below-selected {
+    background: rgba(255,209,102,.18);
+    border-color: rgba(255,209,102,.4);
+    color: #c9a000;
+  }
+
+  /* ── Submit Section ── */
+  .submit-section {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 1.5rem 2rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .submit-info { font-size: .8rem; color: var(--muted); line-height: 1.7; }
+  .submit-info strong { color: var(--text); }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed;
+    bottom: 2rem; right: 2rem;
+    z-index: 999;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 1rem 1.5rem;
+    border-radius: 12px;
+    font-size: .85rem;
+    display: flex;
+    align-items: center;
+    gap: .8rem;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all .3s cubic-bezier(.34,1.56,.64,1);
+    max-width: 360px;
+  }
+  #toast.show { transform: translateY(0); opacity: 1; }
+  #toast.success { border-color: var(--present); }
+  #toast.error   { border-color: var(--absent); }
+  .toast-icon { font-size: 1.2rem; }
+
+  /* ── Loading Overlay ── */
+  #loading {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(10,14,26,.7);
+    backdrop-filter: blur(4px);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  #loading.active { display: flex; }
+  .spinner {
+    width: 40px; height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-size: .85rem; color: var(--muted); }
+
+  /* ── Row fade in ── */
+  tbody tr {
+    opacity: 0;
+    animation: fadeRow .3s ease forwards;
+  }
+  @keyframes fadeRow { to { opacity:1; } }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .config-panel { grid-template-columns: 1fr 1fr; }
+    .stats-bar { grid-template-columns: 1fr 1fr; }
+    .header-meta { display: none; }
+    .mark-btn { width: 28px; height: 28px; font-size: .75rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Loading Overlay -->
+<div id="loading">
+  <div class="spinner"></div>
+  <div class="loading-text">Submitting to Firebase…</div>
+</div>
+
+<!-- Toast -->
+<div id="toast"><span class="toast-icon">✓</span><span id="toast-msg"></span></div>
+
+<!-- Header -->
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    AttendanceOS
+  </div>
+  <div class="header-meta">
+    <div class="meta-badge">DB: <span id="db-status">Connecting…</span></div>
+    <div class="meta-badge">Session: <span id="session-id">—</span></div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Session Config -->
+  <div class="config-panel">
+    <div class="field-group">
+      <label>Subject</label>
+      <select id="subject">
+        <option value="Mathematics">Mathematics</option>
+        <option value="Physics">Physics</option>
+        <option value="Chemistry">Chemistry</option>
+        <option value="Computer Science">Computer Science</option>
+        <option value="English">English</option>
+        <option value="History">History</option>
+        <option value="Biology">Biology</option>
+      </select>
+    </div>
+    <div class="field-group">
+      <label>Class / Section</label>
+      <select id="section">
+        <option value="10-A">Class 10 – A</option>
+        <option value="10-B">Class 10 – B</option>
+        <option value="11-Science">Class 11 – Science</option>
+        <option value="11-Commerce">Class 11 – Commerce</option>
+        <option value="12-Science">Class 12 – Science</option>
+      </select>
+    </div>
+    <div class="field-group">
+      <label>Date</label>
+      <input type="date" id="att-date">
+    </div>
+    <div class="field-group">
+      <label>&nbsp;</label>
+      <button class="btn btn-ghost" onclick="resetAll()">↺ Reset</button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-bar">
+    <div class="stat-card total">
+      <div class="stat-label">Total Students</div>
+      <div class="stat-value" id="stat-total">40</div>
+    </div>
+    <div class="stat-card present">
+      <div class="stat-label">Present</div>
+      <div class="stat-value" id="stat-present">0</div>
+    </div>
+    <div class="stat-card absent">
+      <div class="stat-label">Absent</div>
+      <div class="stat-value" id="stat-absent">0</div>
+    </div>
+    <div class="stat-card marks">
+      <div class="stat-label">Avg Marks</div>
+      <div class="stat-value" id="stat-avg">—</div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls-row">
+    <div class="section-title">Student Roster</div>
+    <div class="bulk-btns">
+      <button class="btn btn-present" onclick="markAll('P')">✓ Mark All Present</button>
+      <button class="btn btn-absent"  onclick="markAll('A')">✗ Mark All Absent</button>
+      <button class="btn btn-export"  onclick="exportCSV()">⬇ Export CSV</button>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <table id="att-table">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Roll No.</th>
+          <th>Student Name</th>
+          <th class="col-att">Attendance</th>
+          <th class="col-marks">Internal Marks (0–5)</th>
+        </tr>
+      </thead>
+      <tbody id="student-tbody"></tbody>
+    </table>
+  </div>
+
+  <!-- Submit Section -->
+  <div class="submit-section">
+    <div class="submit-info">
+      <strong id="ready-count">0 / 40</strong> students marked &nbsp;·&nbsp;
+      Submit will write a timestamped record to Firebase Realtime Database.<br>
+      Ensure all students are marked before submitting.
+    </div>
+    <button class="btn btn-submit" id="submit-btn" onclick="submitData()">Submit Attendance →</button>
+  </div>
+
+</div>
+
+<!-- Firebase SDK -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getDatabase, ref, push, set } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
+// ═══════════════════════════════════════════════════
+//  🔥 FIREBASE CONFIGURATION
+//  Replace with your own Firebase project config
+// ═══════════════════════════════════════════════════
+const firebaseConfig = {
+  apiKey: "AIzaSyD0IJ614iSIZGKxnWsXykoU5Odl0_roXTs",
+  authDomain: "attendance-management-sy-775b6.firebaseapp.com",
+  databaseURL: "https://attendance-management-sy-775b6-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "attendance-management-sy-775b6",
+  storageBucket: "attendance-management-sy-775b6.firebasestorage.app",
+  messagingSenderId: "245487828970",
+  appId: "1:245487828970:web:646943739542433079fc93"
+};
+
+let db;
+try {
+  const app = initializeApp(firebaseConfig);
+  db = getDatabase(app);
+  document.getElementById('db-status').textContent = 'Connected';
+  document.getElementById('db-status').style.color = 'var(--present)';
+} catch(e) {
+  document.getElementById('db-status').textContent = 'Config needed';
+  document.getElementById('db-status').style.color = 'var(--absent)';
+}
+
+// Expose db to window for global use
+window._firebaseDb   = db;
+window._firebaseRef  = ref;
+window._firebasePush = push;
+window._firebaseSet  = set;
+</script>
+
+<script>
+// ── Student Data (40 students) ──
+const STUDENTS = [
+  { roll: "R001", name: "Aarav Sharma" },
+  { roll: "R002", name: "Aditya Kumar" },
+  { roll: "R003", name: "Akash Verma" },
+  { roll: "R004", name: "Amit Singh" },
+  { roll: "R005", name: "Ananya Gupta" },
+  { roll: "R006", name: "Arjun Patel" },
+  { roll: "R007", name: "Bhavna Joshi" },
+  { roll: "R008", name: "Deepika Rao" },
+  { roll: "R009", name: "Dev Malhotra" },
+  { roll: "R010", name: "Divya Nair" },
+  { roll: "R011", name: "Farhan Khan" },
+  { roll: "R012", name: "Gaurav Mishra" },
+  { roll: "R013", name: "Harini Reddy" },
+  { roll: "R014", name: "Ishaan Kapoor" },
+  { roll: "R015", name: "Jiya Mehta" },
+  { roll: "R016", name: "Kabir Sinha" },
+  { roll: "R017", name: "Kavya Pillai" },
+  { roll: "R018", name: "Kunal Bose" },
+  { roll: "R019", name: "Lakshmi Iyer" },
+  { roll: "R020", name: "Manav Aggarwal" },
+  { roll: "R021", name: "Meera Saxena" },
+  { roll: "R022", name: "Mohammed Ali" },
+  { roll: "R023", name: "Nandini Choudhary" },
+  { roll: "R024", name: "Nikhil Trivedi" },
+  { roll: "R025", name: "Ojasvi Tiwari" },
+  { roll: "R026", name: "Pallavi Desai" },
+  { roll: "R027", name: "Priya Pandey" },
+  { roll: "R028", name: "Rahul Banerjee" },
+  { roll: "R029", name: "Riya Chandra" },
+  { roll: "R030", name: "Rohit Dubey" },
+  { roll: "R031", name: "Sachin Yadav" },
+  { roll: "R032", name: "Sakshi Bajaj" },
+  { roll: "R033", name: "Sameer Ghosh" },
+  { roll: "R034", name: "Shreya Kulkarni" },
+  { roll: "R035", name: "Siddharth Menon" },
+  { roll: "R036", name: "Sneha Rastogi" },
+  { roll: "R037", name: "Tanvir Hussain" },
+  { roll: "R038", name: "Urvashi Bhatt" },
+  { roll: "R039", name: "Varun Shukla" },
+  { roll: "R040", name: "Zoya Ansari" }
+];
+
+// State
+const state = {};  // { roll: { att: 'P'|'A'|null, marks: 0-5 } }
+STUDENTS.forEach(s => { state[s.roll] = { att: null, marks: 0 }; });
+
+// Set today's date
+document.getElementById('att-date').valueAsDate = new Date();
+updateSessionId();
+
+function updateSessionId() {
+  const d = document.getElementById('att-date').value || new Date().toISOString().slice(0,10);
+  const sub = document.getElementById('subject').value.replace(/\s/g,'');
+  const sec = document.getElementById('section').value;
+  document.getElementById('session-id').textContent = `${sub}_${sec}_${d}`;
+}
+document.getElementById('att-date').addEventListener('change', updateSessionId);
+document.getElementById('subject').addEventListener('change', updateSessionId);
+document.getElementById('section').addEventListener('change', updateSessionId);
+
+// ── Build Table ──
+function buildTable() {
+  const tbody = document.getElementById('student-tbody');
+  tbody.innerHTML = '';
+  STUDENTS.forEach((s, i) => {
+    const tr = document.createElement('tr');
+    tr.id = `row-${s.roll}`;
+    tr.style.animationDelay = `${i * 18}ms`;
+    tr.innerHTML = `
+      <td class="col-num">${i + 1}</td>
+      <td><div class="roll-num">${s.roll}</div></td>
+      <td><div class="student-name">${s.name}</div></td>
+      <td class="col-att">
+        <div class="att-toggle">
+          <button class="att-btn" id="btn-p-${s.roll}" onclick="setAtt('${s.roll}','P')">✓ Present</button>
+          <button class="att-btn" id="btn-a-${s.roll}" onclick="setAtt('${s.roll}','A')">✗ Absent</button>
+        </div>
+      </td>
+      <td class="col-marks">
+        <div class="marks-wrap" id="marks-wrap-${s.roll}">
+          ${[0,1,2,3,4,5].map(n =>
+            `<button class="mark-btn" id="mbtn-${s.roll}-${n}" onclick="setMarks('${s.roll}',${n})">${n}</button>`
+          ).join('')}
+        </div>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function setAtt(roll, val) {
+  state[roll].att = val;
+  const row = document.getElementById(`row-${roll}`);
+  const btnP = document.getElementById(`btn-p-${roll}`);
+  const btnA = document.getElementById(`btn-a-${roll}`);
+  btnP.className = 'att-btn' + (val==='P' ? ' active-p' : '');
+  btnA.className = 'att-btn' + (val==='A' ? ' active-a' : '');
+  row.className = val === 'P' ? 'is-present' : 'is-absent';
+  updateStats();
+}
+
+function setMarks(roll, val) {
+  val = parseInt(val);
+  state[roll].marks = val;
+  for (let n = 0; n <= 5; n++) {
+    const btn = document.getElementById(`mbtn-${roll}-${n}`);
+    if (!btn) continue;
+    if (n === val)    btn.className = 'mark-btn selected';
+    else if (n < val) btn.className = 'mark-btn below-selected';
+    else              btn.className = 'mark-btn';
+  }
+  updateStats();
+}
+
+function markAll(val) {
+  STUDENTS.forEach(s => setAtt(s.roll, val));
+}
+
+function resetAll() {
+  STUDENTS.forEach(s => {
+    state[s.roll] = { att: null, marks: 0 };
+    const row = document.getElementById(`row-${s.roll}`);
+    row.className = '';
+    document.getElementById(`btn-p-${s.roll}`).className = 'att-btn';
+    document.getElementById(`btn-a-${s.roll}`).className = 'att-btn';
+    setMarks(s.roll, 0);
+  });
+  updateStats();
+}
+
+function updateStats() {
+  let present = 0, absent = 0, totalMarks = 0, markedCount = 0;
+  STUDENTS.forEach(s => {
+    if (state[s.roll].att === 'P') present++;
+    if (state[s.roll].att === 'A') absent++;
+    if (state[s.roll].att !== null) markedCount++;
+    totalMarks += state[s.roll].marks;
+  });
+  document.getElementById('stat-present').textContent = present;
+  document.getElementById('stat-absent').textContent  = absent;
+  document.getElementById('stat-avg').textContent = markedCount > 0
+    ? (totalMarks / STUDENTS.length).toFixed(1) : '—';
+  document.getElementById('ready-count').textContent = `${markedCount} / ${STUDENTS.length}`;
+  document.getElementById('submit-btn').disabled = markedCount < STUDENTS.length;
+}
+
+// ── Submit to Firebase ──
+async function submitData() {
+  const db   = window._firebaseDb;
+  const ref  = window._firebaseRef;
+  const push = window._firebasePush;
+
+  if (!db) {
+    showToast('Firebase not configured. Check your config!', 'error');
+    return;
+  }
+
+  const subject = document.getElementById('subject').value;
+  const section = document.getElementById('section').value;
+  const date    = document.getElementById('att-date').value;
+
+  const payload = {
+    subject, section, date,
+    submittedAt: new Date().toISOString(),
+    summary: {
+      total: STUDENTS.length,
+      present: Object.values(state).filter(s => s.att === 'P').length,
+      absent:  Object.values(state).filter(s => s.att === 'A').length,
+    },
+    students: STUDENTS.map(s => ({
+      roll: s.roll,
+      name: s.name,
+      attendance: state[s.roll].att,
+      internalMarks: state[s.roll].marks
+    }))
+  };
+
+  document.getElementById('loading').classList.add('active');
+
+  try {
+    const sessionRef = ref(db, `attendance/${section}/${subject}/${date}`);
+    await push(sessionRef, payload);
+    document.getElementById('loading').classList.remove('active');
+    showToast('Attendance saved to Firebase successfully!', 'success');
+  } catch (err) {
+    document.getElementById('loading').classList.remove('active');
+    showToast('Error: ' + err.message, 'error');
+  }
+}
+
+// ── Export CSV ──
+function exportCSV() {
+  const subject = document.getElementById('subject').value;
+  const section = document.getElementById('section').value;
+  const date    = document.getElementById('att-date').value;
+  let csv = `Roll No,Name,Attendance,Internal Marks\n`;
+  STUDENTS.forEach(s => {
+    const att   = state[s.roll].att || 'Not Marked';
+    const marks = state[s.roll].marks;
+    csv += `${s.roll},${s.name},${att === 'P' ? 'Present' : att === 'A' ? 'Absent' : att},${marks}\n`;
+  });
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `attendance_${section}_${subject}_${date}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Toast ──
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  t.className = `show ${type}`;
+  t.querySelector('.toast-icon').textContent = type === 'success' ? '✓' : '✗';
+  setTimeout(() => { t.className = ''; }, 4000);
+}
+
+// ── Init ──
+buildTable();
+updateStats();
+</script>
+</body>
+</html>
